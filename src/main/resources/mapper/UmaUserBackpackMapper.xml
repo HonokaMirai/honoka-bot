@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.honoka.dao.mapper.UmaUserBackpackMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.honoka.dao.entity.UmaUserBackpack">
+        <id column="id" property="id" jdbcType="BIGINT" />
+        <result column="user_id" property="userId" jdbcType="BIGINT" />
+        <result column="qq" property="qq" jdbcType="BIGINT" />
+        <result column="uma_id" property="umaId" jdbcType="BIGINT" />
+        <result column="uma_cn_name" property="umaCnName" jdbcType="VARCHAR" />
+        <result column="num" property="num" jdbcType="INTEGER" />
+        <result column="status" property="status" jdbcType="BIT" />
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP" />
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, user_id, qq, uma_id, uma_cn_name, num, `status`, create_time, update_time
+    </sql>
+
+    <insert id="batchInsertOrUpdateGachaList">
+        insert into uma_user_backpack (user_id, qq, uma_id, uma_cn_name, num)
+        values
+        <foreach collection="list" item="item" index="index" separator=",">
+            (#{item.userId}, #{item.qq}, #{item.umaId}, #{item.umaCnName}, #{item.num})
+        </foreach>
+        on duplicate key update
+        num = num + values(num)
+    </insert>
+
+</mapper>

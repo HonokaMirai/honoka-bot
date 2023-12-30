@@ -4,7 +4,7 @@
 
 ## 0.准备事项
 *   根据mirai-console-loader教程安装好必要插件
-*   将本插件（jar包）放进XXX文件夹中
+*   将本插件（jar包）放进{}/plugins/文件夹中
 *   Linux代理软件使用[V2rayA](https://github.com/v2rayA/v2rayA)项目
 *   不使用spring，整合了mybatis、druid数据源、mybatis-plus，可以接入数据库
 ## 1.功能列表
@@ -35,8 +35,10 @@
 
 *   `/c`：使用gpt-api对话
     *   `/c [prompt]`：进行单次对话
+![image](https://github.com/HonokaMirai/honoka-bot/assets/67139503/46397f96-ab91-4c7d-a00d-1ffae8be4a25)
 
     *   `/c sys [prompt]`：进行多次对话的system角色prompt设置
+![image](https://github.com/HonokaMirai/honoka-bot/assets/67139503/cc995b8a-d332-4bf8-8c41-b361d4b0c9bf)
 
     *   `/c t [prompt]`：进行多次对话
 
@@ -45,7 +47,7 @@
     *   权限配置
 
 *   `点歌`
-    *   `点歌 [关键词]`：使用XXX提供的API接口，通过关键词搜索网易云音乐，取搜索结果第一条，转换成语音消息发送出来
+    *   `点歌 [关键词]`：使用松鼠API提供的API接口，通过关键词搜索网易云音乐，取搜索结果第一条，转换成语音消息发送出来
 
     *   权限配置
 

@@ -1,0 +1,355 @@
+package com.honoka.handler;
+
+import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.util.StrUtil;
+import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.JSONObject;
+import com.honoka.HonokaBotPlugin;
+import com.honoka.api.resp.ChatGptPromptResp;
+import com.honoka.api.resp.GptEmotionResp;
+import com.honoka.config.BotConfig;
+import com.honoka.config.ChatGPTConfig;
+import com.honoka.config.FileConfig;
+import com.honoka.dao.entity.GptPromptConfig;
+import com.honoka.dao.mapper.GptPromptConfigMapper;
+import com.honoka.mirai.config.OpenAiGptConfig;
+import com.honoka.util.CommandUtil;
+import com.honoka.util.MiraiUtil;
+import com.honoka.util.MybatisUtil;
+import com.unfbx.chatgpt.entity.chat.ChatChoice;
+import com.unfbx.chatgpt.entity.chat.ChatCompletionResponse;
+import com.unfbx.chatgpt.entity.chat.Message;
+import com.unfbx.chatgpt.entity.whisper.WhisperResponse;
+import com.unfbx.chatgpt.exception.BaseException;
+import io.github.mzdluo123.silk4j.AudioUtils;
+import net.mamoe.mirai.console.command.CommandContext;
+import net.mamoe.mirai.console.command.CommandSender;
+import net.mamoe.mirai.console.command.java.JRawCommand;
+import net.mamoe.mirai.contact.Contact;
+import net.mamoe.mirai.contact.Group;
+import net.mamoe.mirai.contact.Member;
+import net.mamoe.mirai.contact.User;
+import net.mamoe.mirai.message.data.*;
+import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+
+/**
+ * @author honoka
+ * @description ChatGPT相关
+ * @date 2023-02-02 01:28:07
+ */
+public class ChatGPTCommandHandler extends JRawCommand {
+
+    public static final ChatGPTCommandHandler INSTANCE = new ChatGPTCommandHandler();
+
+    public ChatGPTCommandHandler() {
+        super(HonokaBotPlugin.INSTANCE, "c");
+        setUsage("/c");
+        setDescription("发送ChatGpt消息");
+        setPrefixOptional(true);
+    }
+
+    /**
+     * /c [prompt]
+     * /c t sys [prompt]
+     * /c t [prompt]
+     * /c img [prompt]
+     * /c end
+     *
+     * @param context
+     * @param args
+     */
+    @Override
+    public void onCommand(@NotNull CommandContext context, @NotNull MessageChain args) {
+        CommandSender sender = context.getSender();
+        if (CollectionUtil.isEmpty(args) || sender.getSubject() == null || sender.getUser() == null) {
+            // 相关信息为空
+            return;
+        }
+
+        // 获取发送者的QQ
+        long qq = sender.getUser().getId();
+        // 获取第一个参数
+        String prompt = args.get(0).contentToString();
+
+        // 获取用户会话列表
+        List<Message> userMessageList;
+        boolean parseFlag = false;
+
+        switch (prompt) {
+            case ChatGPTConfig.Command.SET:
+                // 设置所有人的单次会话预设
+                this.setSystemPreset(args);
+                return;
+            case ChatGPTConfig.Command.CHARACTER:
+                // 设置角色
+                this.setSystemCharacter(args);
+                return;
+            case ChatGPTConfig.Command.REFRESH:
+                // 清除所有人的单次会话预设
+                ChatGPTConfig.refreshSystemPreset();
+                return;
+            case ChatGPTConfig.Command.SYS:
+                // 设置持续性对话的system
+                userMessageList = ChatGPTConfig.getUserMessageList(qq);
+                userMessageList.add(0, Message.builder().role(Message.Role.SYSTEM.getName()).content(this.buildMessageContent(args)).build());
+                // 回复消息
+                sender.getSubject().sendMessage("设置完成~");
+                return;
+            case ChatGPTConfig.Command.T:
+                // 执行持续性对话
+                userMessageList = ChatGPTConfig.getUserMessageList(qq);
+                userMessageList.add(Message.builder().role(Message.Role.USER.getName()).content(this.buildMessageContent(args)).build());
+                break;
+            case ChatGPTConfig.Command.END:
+                // 清空用户会话列表
+                ChatGPTConfig.removeUserMessageList(qq);
+                // 回复消息
+                sender.getSubject().sendMessage("会话已结束~");
+                return;
+            default:
+                // 执行一次性对话
+                userMessageList = new ArrayList<>();
+                if (Objects.nonNull(ChatGPTConfig.getSystemPresetPrompt())) {
+                    parseFlag = true;
+                }
+                this.oneTimeSessionChat(args, userMessageList);
+                break;
+        }
+
+        // 发送API请求
+        String reply = "";
+        try {
+            ChatCompletionResponse chatResponse = ChatGPTConfig.getOpenAiClient().chatCompletion(ChatGPTConfig.getChatCompletion(userMessageList));
+            List<ChatChoice> choices = chatResponse.getChoices();
+            for (ChatChoice choice : choices) {
+                reply = choice.getMessage().getContent();
+                if (StrUtil.isNotBlank(reply)) {
+                    if (parseFlag) {
+                        // 发送带表情的情感消息
+                        this.sendEmotionMessage(sender, reply);
+                        return;
+                    }
+                    userMessageList.add(choice.getMessage());
+                }
+                // 回复消息
+                sender.getSubject().sendMessage(CommandUtil.filter(reply));
+            }
+        } catch (BaseException e) {
+            // token过多，提示用户
+            BotConfig.logger.error(e);
+            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), qq, "Token超出上限，请使用/c end清空会话。");
+            sender.getSubject().sendMessage(message);
+        } catch (JSONException e) {
+            // 解析json出错
+            BotConfig.logger.error("解析json发生异常" + e);
+            BotConfig.logger.error("解析json发生异常 userMessageList: " + JSONObject.toJSONString(userMessageList));
+            // 返回默认信息
+            sender.getSubject().sendMessage(CommandUtil.filter(reply));
+        } catch (Exception e) {
+            // 请求异常
+            BotConfig.logger.error("userMessageList: " + JSONObject.toJSONString(userMessageList));
+            BotConfig.logger.error("reply: " + reply);
+            BotConfig.logger.error(e);
+            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), qq, "请求发生异常，请稍后重试。");
+            sender.getSubject().sendMessage(message);
+        }
+
+    }
+
+    /**
+     * 发送带表情的情感消息
+     * @param sender
+     * @param text
+     * @throws IOException
+     */
+    private void sendEmotionMessage(CommandSender sender, String text) throws IOException {
+        //  解析预设
+        GptEmotionResp emotionResp = JSONObject.parseObject(text, GptEmotionResp.class);
+        String answer = emotionResp.getAnswer();
+        String emotion = emotionResp.getEmotion();
+
+        // 通过emotion查询对应的图片
+        File emotionFile = FileConfig.getFileByEmotion(emotion);
+        MessageChainBuilder messageChainBuilder = new MessageChainBuilder();
+        if (Objects.nonNull(emotionFile)) {
+            // 将文件转换为输入流
+            InputStream inputStream = new FileInputStream(emotionFile);
+            Image image = Contact.uploadImage(sender.getSubject(), inputStream);
+            messageChainBuilder.append(image);
+            inputStream.close();
+        }
+        // 构造回复消息
+        MessageChain emotionMessage = messageChainBuilder.append(answer).build();
+        sender.getSubject().sendMessage(emotionMessage);
+    }
+
+    /**
+     * 设置系统预设
+     * @param args
+     */
+    private void setSystemPreset(MessageChain args) {
+        String prompt = args.get(1).contentToString();
+        // 查询对应的预设
+        GptPromptConfig config = MybatisUtil.execute(sqlSession ->
+                sqlSession.getMapper(GptPromptConfigMapper.class).selectConfigByType(prompt));
+        if (Objects.isNull(config)) {
+            // 未查询到预设
+            return;
+        }
+        ChatGPTConfig.setSystemPreset(config);
+        BotConfig.logger.info("GPT预设已设置为: " + JSONObject.toJSONString(config));
+    }
+
+    /**
+     * 设置系统角色
+     * @param args
+     */
+    private void setSystemCharacter(MessageChain args) {
+        ChatGPTConfig.character = args.get(1).contentToString();
+        BotConfig.logger.info("GPT角色已设置为: " + ChatGPTConfig.character);
+    }
+
+    /**
+     * 设置持续性对话的system
+
+     * @param args            消息链
+     * @param userMessageList 用户会话列表
+     */
+    private void setSystemMessage(MessageChain args, List<Message> userMessageList) {
+        StringBuilder sb = new StringBuilder();
+        // 设置System消息
+        for (int i = 1; i < args.size(); i++) {
+            sb.append(args.get(i).contentToString()).append(" ");
+        }
+        userMessageList.add(0, Message.builder().role(Message.Role.SYSTEM.getName()).content(sb.toString()).build());
+    }
+
+    /**
+     * 构建回复消息
+     * @param args
+     * @return
+     */
+    private String buildMessageContent(MessageChain args) {
+        StringBuilder sb = new StringBuilder();
+        // 构建消息
+        for (int i = 1; i < args.size(); i++) {
+            sb.append(args.get(i).contentToString()).append(" ");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 发起一次性对话
+     *
+     * @param args            消息链
+     * @param userMessageList 用户会话列表
+     */
+    private void oneTimeSessionChat(MessageChain args, List<Message> userMessageList) {
+        //发起一次问答对话
+        StringBuilder sb = new StringBuilder();
+        for (SingleMessage arg : args) {
+            sb.append(arg.contentToString()).append(" ");
+        }
+        Message systemPreset = ChatGPTConfig.getSystemPresetPrompt();
+        if (Objects.nonNull(systemPreset)) {
+            userMessageList.add(systemPreset);
+        }
+        userMessageList.add(Message.builder().role(Message.Role.USER.getName()).content(sb.toString()).build());
+    }
+
+    /**
+     * 通过Whisper语音转文字
+     *
+     * @param sender       消息发送人
+     * @param messageChain 语音消息链
+     */
+    public static void onlineAudioToWhisper(User sender, MessageChain messageChain) {
+        for (SingleMessage singleMessage : messageChain) {
+            //判断是否为一个在线语音消息，即群员发送的消息
+            if (singleMessage instanceof OnlineAudio) {
+                OnlineAudio onlineAudio = (OnlineAudio) singleMessage;
+                String urlForDownload = onlineAudio.getUrlForDownload();
+                //BotConfig.logger.info("获取到语音下载链接: " + urlForDownload);
+                File file = FileConfig.urlToFile(urlForDownload, "");
+                //BotConfig.logger.info("QQ在线语音缓存地址: " + file.getAbsolutePath());
+                File mp3File = convertSilkToMp3(file);
+                String text = "";
+                try {
+                    WhisperResponse whisperResponse = ChatGPTConfig.getOpenAiClient().speechToTextTranscriptions(mp3File);
+                    text = whisperResponse.getText();
+                } catch (Exception e) {
+                    BotConfig.logger.error(e);
+                }
+                //调用成功，发送消息
+                MessageChain message = new MessageChainBuilder()
+                        .append(new QuoteReply(messageChain))
+                        .append(new At(sender.getId()))
+                        .append("   ")
+                        .append(text).build();
+                Group group = ((Member) sender).getGroup();
+                group.sendMessage(message);
+            }
+
+        }
+    }
+
+    /**
+     * 将一个QQ语音的SILK文件转换成MAP3格式的语音文件
+     *
+     * @param file silk文件
+     * @return file MP3文件
+     */
+    public static File convertSilkToMp3(File file) {
+        File mp3File = null;
+        try {
+            mp3File = AudioUtils.silkToMp3(file);
+        } catch (IOException e) {
+            BotConfig.logger.error("语音格式转换失败: " + e);
+        }
+        return mp3File;
+    }
+
+    /**
+     * 发送一条自然语言处理成PROMPT的消息
+     */
+    public static ChatGptPromptResp handleStableDiffusionTemplateContent(String content) {
+        //获取配置类信息
+        String sysPrompt = OpenAiGptConfig.INSTANCE.SD_PROMPT.get();
+
+        List<Message> userMessageList = new ArrayList<>();
+        Message systemMsg = Message.builder().role(Message.Role.SYSTEM.getName()).content(sysPrompt).build();
+        Message userMsg = Message.builder().role(Message.Role.USER.getName()).content(content).build();
+
+        userMessageList.add(systemMsg);
+        userMessageList.add(userMsg);
+
+        //开始调用GPT3.5API
+        ChatCompletionResponse chatResponse = ChatGPTConfig.getOpenAiClient().chatCompletion(ChatGPTConfig.getChatCompletion(userMessageList));
+        List<ChatChoice> choices = chatResponse.getChoices();
+        for (ChatChoice choice : choices) {
+            String text = choice.getMessage().getContent();
+            if (StringUtils.isNotBlank(text)) {
+                //将回答的信息转换成json格式
+                BotConfig.logger.info("请求给GPT的消息为:" + JSONObject.toJSONString(userMessageList));
+                BotConfig.logger.info("获取到GPT返回的回答:" + text);
+                try {
+                    ChatGptPromptResp chatGptPromptVO = JSONObject.parseObject(text, ChatGptPromptResp.class);
+                    return chatGptPromptVO;
+                } catch (Exception e) {
+                    BotConfig.logger.error("获取到GPT返回的回答时发生错误:" + e);
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+}

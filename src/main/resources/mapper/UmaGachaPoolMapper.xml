@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.honoka.dao.mapper.UmaGachaPoolMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.honoka.dao.entity.UmaGachaPool">
+        <id column="id" property="id" jdbcType="BIGINT" />
+        <result column="uma_id" property="umaId" jdbcType="BIGINT" />
+        <result column="uma_cn_name" property="umaCnName" jdbcType="VARCHAR" />
+        <result column="uma_jp_name" property="umaJpName" jdbcType="VARCHAR" />
+        <result column="icon" property="icon" jdbcType="VARCHAR" />
+        <result column="uma_rare" property="umaRare" jdbcType="VARCHAR" />
+        <result column="uma_probability" property="umaProbability" jdbcType="INTEGER" />
+        <result column="status" property="status" jdbcType="BIT" />
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP" />
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, uma_id, uma_cn_name, uma_jp_name, icon, uma_rare, uma_probability, `status`, create_time, update_time
+    </sql>
+
+</mapper>

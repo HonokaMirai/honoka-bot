@@ -105,8 +105,8 @@ public class ChatGPTCommandHandler extends JRawCommand {
             case ChatGPTConfig.Command.REFRESH:
                 // 清除所有人的单次会话预设
                 ChatGPTConfig.refreshSystemPreset();
-                // 刷新GPT配置
-                ChatGPTConfig.refreshGPTConfig();
+                // 刷新BOT配置
+                FileConfig.refreshBotConfig();
                 return;
             default:
                 // 执行一次性对话

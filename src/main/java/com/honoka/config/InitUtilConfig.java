@@ -20,7 +20,7 @@ public class InitUtilConfig {
             e.printStackTrace();
             BotConfig.logger.error("初始化AudioUtils工具类失败: " + e);
         }
-        // 初始化GPT配置
-        ChatGPTConfig.refreshGPTConfig();
+        // 初始化BOT配置
+        FileConfig.refreshBotConfig();
     }
 }

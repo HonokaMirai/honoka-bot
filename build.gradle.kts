@@ -44,4 +44,6 @@ dependencies {
     implementation("com.google.guava:guava:31.1-jre")
     // 引入yaml解析
     implementation("org.yaml:snakeyaml:2.0")
+    // 引入disruptor
+    implementation("com.lmax:disruptor:3.4.4")
 }

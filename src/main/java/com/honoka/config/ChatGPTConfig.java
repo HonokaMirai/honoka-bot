@@ -195,15 +195,28 @@ public class ChatGPTConfig {
         } catch (BaseException e) {
             // token过多，提示用户
             BotConfig.logger.error(e);
-            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), context.getSender().getUser().getId(), "Token超出上限，请使用/c end清空会话。");
-            context.getSender().getSubject().sendMessage(message);
+            if (Objects.nonNull(context)) {
+                MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), context.getSender().getUser().getId(), "Token超出上限，请使用/c end清空会话。");
+                context.getSender().getSubject().sendMessage(message);
+            }
         } catch (Exception e) {
             // 请求异常
             BotConfig.logger.error(e);
-            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), context.getSender().getUser().getId(), "请求发生异常，请稍后重试。");
-            context.getSender().getSubject().sendMessage(message);
+            if (Objects.nonNull(context)) {
+                MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), context.getSender().getUser().getId(), "请求发生异常，请稍后重试。");
+                context.getSender().getSubject().sendMessage(message);
+            }
         }
         return assistantCompletionMessage;
+    }
+
+    /**
+     * 处理AI会话请求，处理结果
+     * @param messageList
+     * @return
+     */
+    public static AssistantCompletionMessage handleChatCompletionApi(List<Message> messageList) {
+        return handleChatCompletionApi(null, messageList, null);
     }
 
     /**
@@ -295,15 +308,4 @@ public class ChatGPTConfig {
         systemPreset = null;
     }
 
-    /**
-     * 刷新GPT配置
-     */
-    public static void refreshGPTConfig() {
-        // 获取最新的本地配置
-        BotConfig botConfig = FileConfig.getBotConfig();
-        // 重新设置
-        HOST = botConfig.getGptConfig().getHost();
-        APIKEY = botConfig.getGptConfig().getApikey();
-        MODELS = botConfig.getGptConfig().getModels();
-    }
 }

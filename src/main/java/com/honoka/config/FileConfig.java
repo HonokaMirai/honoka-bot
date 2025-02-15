@@ -2,6 +2,7 @@ package com.honoka.config;
 
 import cn.hutool.core.util.URLUtil;
 import com.honoka.HonokaBotPlugin;
+import com.honoka.component.GroupAutoReplyManager;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
@@ -212,5 +213,19 @@ public class FileConfig {
             e.printStackTrace();
         }
         return botConfig;
+    }
+
+    public static void refreshBotConfig() {
+        // 获取最新的本地配置
+        BotConfig botConfig = getBotConfig();
+        // 重新设置GPT配置
+        ChatGPTConfig.HOST = botConfig.getGptConfig().getHost();
+        ChatGPTConfig.APIKEY = botConfig.getGptConfig().getApikey();
+        ChatGPTConfig.MODELS = botConfig.getGptConfig().getModels();
+        // 重新设置BOT配置
+        GroupAutoReplyManager.MYSELF_QQ = botConfig.getQq();
+        GroupAutoReplyManager.SYSTEM_PROMPT = botConfig.getReplyConfig().getSystemPrompt();
+        GroupAutoReplyManager.ENABLE_GROUP_LIST = botConfig.getReplyConfig().getGroups();
+        GroupAutoReplyManager.COLLECT_COUNT = botConfig.getReplyConfig().getCollectCount();
     }
 }

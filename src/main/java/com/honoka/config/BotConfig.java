@@ -3,6 +3,7 @@ package com.honoka.config;
 import lombok.Data;
 import net.mamoe.mirai.utils.MiraiLogger;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -15,7 +16,11 @@ public class BotConfig {
 
     public volatile static MiraiLogger logger;
 
+    private Long qq = 0L;
+
     private GptConfig gptConfig = new GptConfig();
+
+    private ReplyConfig replyConfig = new ReplyConfig();
 
     @Data
     public static class GptConfig {
@@ -28,6 +33,18 @@ public class BotConfig {
 
         // 可支持的模型列表
         private List<String> models;
+
+    }
+
+    @Data
+    public static class ReplyConfig {
+
+        private Long collectCount = 15L;
+
+        private String systemPrompt = "";
+
+        private List<Long> groups = new ArrayList<>();
+
 
     }
 

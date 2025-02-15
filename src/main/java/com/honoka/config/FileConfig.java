@@ -2,12 +2,17 @@ package com.honoka.config;
 
 import cn.hutool.core.util.URLUtil;
 import com.honoka.HonokaBotPlugin;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.Random;
 
@@ -27,6 +32,8 @@ public class FileConfig {
 
     private static final String EMOTION_DIR = "/emotion";
 
+    private static final String CONFIG = "/config";
+
     public static final String VTUBER_PATH = DATA_PATH + AUDIO_DIR + VTUBER_DIR;
 
     public static final String TEMP_PATH = DATA_PATH + AUDIO_DIR + TEMP_DIR;
@@ -37,6 +44,12 @@ public class FileConfig {
 
     public static final String TEMP_PICTURE_PATH = DATA_PATH + PICTURE_DIR + TEMP_DIR;
 
+    public static final String CONFIG_PATH = DATA_PATH + CONFIG;
+
+    public static final String BOT_CONFIG_FILENAME = "botConfig.yaml";
+
+    public static final String BOT_CONFIG_PATH = CONFIG_PATH + "/" + BOT_CONFIG_FILENAME;
+
     /**
      * 初始化文件夹
      */
@@ -46,6 +59,21 @@ public class FileConfig {
         createFiles(MUSIC_PATH);
         createFiles(PICTURE_DIR);
         createFiles(TEMP_PICTURE_PATH);
+        createFiles(CONFIG_PATH);
+    }
+
+    /**
+     * 初始化文件
+     */
+    public static void checkFile() {
+        File file = new File(BOT_CONFIG_PATH);
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                BotConfig.logger.error("初始化文件失败: " + e);
+            }
+        }
     }
 
     /**
@@ -166,5 +194,23 @@ public class FileConfig {
             //outputFile.deleteOnExit();
         }
         return outputFile;
+    }
+
+    /**
+     * 解析配置文件
+     * @return
+     */
+    public static BotConfig getBotConfig() {
+        // 读取本地配置文件
+        LoaderOptions options = new LoaderOptions();
+        Constructor constructor = new Constructor(BotConfig.class, options);
+        Yaml yaml = new Yaml(constructor);        BotConfig botConfig = new BotConfig();
+        try (InputStream inputStream = Files.newInputStream(Paths.get(BOT_CONFIG_PATH))) {
+            // 解析配置文件为java对象
+            botConfig = yaml.loadAs(inputStream, BotConfig.class);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return botConfig;
     }
 }

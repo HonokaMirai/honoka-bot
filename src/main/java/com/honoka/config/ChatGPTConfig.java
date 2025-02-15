@@ -1,13 +1,22 @@
 package com.honoka.config;
 
 import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.util.StrUtil;
+import com.alibaba.fastjson.JSONObject;
 import com.honoka.dao.entity.GptPromptConfig;
 import com.honoka.mirai.config.OpenAiGptConfig;
+import com.honoka.model.ai.AssistantCompletionMessage;
+import com.honoka.util.MiraiUtil;
 import com.unfbx.chatgpt.OpenAiClient;
 import com.unfbx.chatgpt.entity.chat.ChatCompletion;
+import com.unfbx.chatgpt.entity.chat.ChatCompletionResponse;
 import com.unfbx.chatgpt.entity.chat.Message;
+import com.unfbx.chatgpt.exception.BaseException;
 import com.unfbx.chatgpt.interceptor.OpenAiResponseInterceptor;
 import lombok.Data;
+import net.mamoe.mirai.console.command.CommandContext;
+import net.mamoe.mirai.console.command.CommandSender;
+import net.mamoe.mirai.message.data.MessageChain;
 import okhttp3.OkHttpClient;
 
 import java.util.*;
@@ -46,6 +55,26 @@ public class ChatGPTConfig {
      */
     public static String character = "Shinigamichan";
 
+    /**
+     * HOST
+     */
+    public static String HOST = "https://api.holdai.top";
+
+    /**
+     * APIKEY
+     */
+    public static String APIKEY = "";
+
+    /**
+     * 默认模型
+     */
+    public static String DEFAULT_MODEL = "gpt-3.5-turbo";
+
+    /**
+     * 支持的模型列表
+     */
+    public static List<String> MODELS = new ArrayList<>();
+
 
     /**
      * 设置的可用参数常量
@@ -68,11 +97,6 @@ public class ChatGPTConfig {
         public static final String SET = "set";
 
         /**
-         * 设置所有人单次对话的system预设
-         */
-        public static final String SET_ALL = "setAll";
-
-        /**
          * 清除所有人单次对话的system预设
          */
         public static final String REFRESH = "refresh";
@@ -86,6 +110,16 @@ public class ChatGPTConfig {
          * 结束会话-清空会话列表
          */
         public static final String END = "end";
+
+        /**
+         * change model
+         */
+        public static final String MODEL = "model";
+
+        /**
+         * models列表查询
+         */
+        public static final String MODELS = "models";
     }
 
     /**
@@ -103,7 +137,8 @@ public class ChatGPTConfig {
                             .build();
                     openAiClient = OpenAiClient.builder()
                             //支持多key传入，请求时候随机选择
-                            .apiKey(Arrays.asList(OpenAiGptConfig.INSTANCE.API_KEY.get()))
+                            .apiKey(Arrays.asList(APIKEY))
+                            .apiHost(HOST)
                             //自定义key的获取策略：默认KeyRandomStrategy
                             //.keyStrategy(new KeyRandomStrategy())
                             //.keyStrategy(new FirstKeyStrategy())
@@ -121,8 +156,51 @@ public class ChatGPTConfig {
      * @param messageList
      * @return
      */
-    public static ChatCompletion getChatCompletion(List<Message> messageList) {
-        return ChatCompletion.builder().messages(messageList).temperature(1.0).build();
+    public static ChatCompletion getChatCompletion(String model, List<Message> messageList) {
+        if (StrUtil.isBlank(model)) {
+            model = ChatGPTConfig.DEFAULT_MODEL;
+        }
+        return ChatCompletion.builder().messages(messageList).model(model).temperature(1.0).build();
+    }
+
+    /**
+     * 修改model值
+     */
+    public static void setModel(String model) {
+        ChatGPTConfig.DEFAULT_MODEL = model;
+    }
+
+    /**
+     * 处理AI会话请求，处理结果
+     * @param model
+     * @param messageList
+     * @return
+     */
+    public static AssistantCompletionMessage handleChatCompletionApi(String model, List<Message> messageList, CommandContext context) {
+        AssistantCompletionMessage assistantCompletionMessage = new AssistantCompletionMessage();
+
+        try {
+            // 1.调用OpenAiClient的chatCompletion方法
+            ChatCompletion chatCompletion = getChatCompletion(model, messageList);
+            ChatCompletionResponse response = getOpenAiClient().chatCompletion(chatCompletion);
+            // 2.处理返回结果
+            StringBuilder sb = new StringBuilder();
+            response.getChoices().forEach(choice -> {
+                sb.append(choice.getMessage().getContent());
+            });
+            assistantCompletionMessage.setContent(sb.toString());
+        } catch (BaseException e) {
+            // token过多，提示用户
+            BotConfig.logger.error(e);
+            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), context.getSender().getUser().getId(), "Token超出上限，请使用/c end清空会话。");
+            context.getSender().getSubject().sendMessage(message);
+        } catch (Exception e) {
+            // 请求异常
+            BotConfig.logger.error(e);
+            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), context.getSender().getUser().getId(), "请求发生异常，请稍后重试。");
+            context.getSender().getSubject().sendMessage(message);
+        }
+        return assistantCompletionMessage;
     }
 
     /**
@@ -194,5 +272,17 @@ public class ChatGPTConfig {
      */
     public static void refreshSystemPreset() {
         systemPreset = null;
+    }
+
+    /**
+     * 刷新GPT配置
+     */
+    public static void refreshGPTConfig() {
+        // 获取最新的本地配置
+        BotConfig botConfig = FileConfig.getBotConfig();
+        // 重新设置
+        HOST = botConfig.getGptConfig().getHost();
+        APIKEY = botConfig.getGptConfig().getApikey();
+        MODELS = botConfig.getGptConfig().getModels();
     }
 }

@@ -1,5 +1,5 @@
 plugins {
-    val kotlinVersion = "1.7.10"
+    val kotlinVersion = "1.9.0"
     kotlin("jvm") version kotlinVersion
     kotlin("plugin.serialization") version kotlinVersion
 
@@ -42,5 +42,6 @@ dependencies {
     // 引入swagger
     implementation("io.swagger.core.v3:swagger-annotations:2.2.8")
     implementation("com.google.guava:guava:31.1-jre")
-
+    // 引入yaml解析
+    implementation("org.yaml:snakeyaml:2.0")
 }

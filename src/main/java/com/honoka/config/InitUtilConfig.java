@@ -13,11 +13,14 @@ import java.io.IOException;
 public class InitUtilConfig {
 
     public static void init() {
+        // 初始化音频工具类
         try {
             AudioUtils.init(new File(FileConfig.TEMP_PATH));
         } catch (IOException e) {
             e.printStackTrace();
             BotConfig.logger.error("初始化AudioUtils工具类失败: " + e);
         }
+        // 初始化GPT配置
+        ChatGPTConfig.refreshGPTConfig();
     }
 }

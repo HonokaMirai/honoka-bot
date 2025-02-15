@@ -13,6 +13,8 @@ import com.honoka.config.FileConfig;
 import com.honoka.dao.entity.GptPromptConfig;
 import com.honoka.dao.mapper.GptPromptConfigMapper;
 import com.honoka.mirai.config.OpenAiGptConfig;
+import com.honoka.model.ai.AssistantCompletionMessage;
+import com.honoka.model.ai.UserChatMessage;
 import com.honoka.util.CommandUtil;
 import com.honoka.util.MiraiUtil;
 import com.honoka.util.MybatisUtil;
@@ -37,7 +39,6 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 
 /**
@@ -77,16 +78,25 @@ public class ChatGPTCommandHandler extends JRawCommand {
         // 获取发送者的QQ
         long qq = sender.getUser().getId();
         // 获取第一个参数
-        String prompt = args.get(0).contentToString();
+        String operate = args.get(0).contentToString();
 
         // 获取用户会话列表
-        List<Message> userMessageList;
-        boolean parseFlag = false;
+        List<Message> userMessageList = new ArrayList<>();
 
-        switch (prompt) {
+        switch (operate) {
             case ChatGPTConfig.Command.SET:
                 // 设置所有人的单次会话预设
                 this.setSystemPreset(args);
+                return;
+            case ChatGPTConfig.Command.MODEL:
+                // 设置模型
+                this.setModel(args);
+                // 回复消息
+                sender.getSubject().sendMessage("设置完成~");
+                return;
+            case ChatGPTConfig.Command.MODELS:
+                // 获取模型列表
+                sender.getSubject().sendMessage("可支持的模型列表: \n" + JSONObject.toJSONString(ChatGPTConfig.MODELS));
                 return;
             case ChatGPTConfig.Command.CHARACTER:
                 // 设置角色
@@ -95,73 +105,45 @@ public class ChatGPTCommandHandler extends JRawCommand {
             case ChatGPTConfig.Command.REFRESH:
                 // 清除所有人的单次会话预设
                 ChatGPTConfig.refreshSystemPreset();
-                return;
-            case ChatGPTConfig.Command.SYS:
-                // 设置持续性对话的system
-                userMessageList = ChatGPTConfig.getUserMessageList(qq);
-                userMessageList.add(0, Message.builder().role(Message.Role.SYSTEM.getName()).content(this.buildMessageContent(args)).build());
-                // 回复消息
-                sender.getSubject().sendMessage("设置完成~");
-                return;
-            case ChatGPTConfig.Command.T:
-                // 执行持续性对话
-                userMessageList = ChatGPTConfig.getUserMessageList(qq);
-                userMessageList.add(Message.builder().role(Message.Role.USER.getName()).content(this.buildMessageContent(args)).build());
-                break;
-            case ChatGPTConfig.Command.END:
-                // 清空用户会话列表
-                ChatGPTConfig.removeUserMessageList(qq);
-                // 回复消息
-                sender.getSubject().sendMessage("会话已结束~");
+                // 刷新GPT配置
+                ChatGPTConfig.refreshGPTConfig();
                 return;
             default:
                 // 执行一次性对话
-                userMessageList = new ArrayList<>();
-                if (Objects.nonNull(ChatGPTConfig.getSystemPresetPrompt())) {
-                    parseFlag = true;
-                }
-                this.oneTimeSessionChat(args, userMessageList);
-                break;
+                this.singleChat(args, userMessageList, context);
+                return;
         }
 
-        // 发送API请求
-        String reply = "";
-        try {
-            ChatCompletionResponse chatResponse = ChatGPTConfig.getOpenAiClient().chatCompletion(ChatGPTConfig.getChatCompletion(userMessageList));
-            List<ChatChoice> choices = chatResponse.getChoices();
-            for (ChatChoice choice : choices) {
-                reply = choice.getMessage().getContent();
-                if (StrUtil.isNotBlank(reply)) {
-                    if (parseFlag) {
-                        // 发送带表情的情感消息
-                        this.sendEmotionMessage(sender, reply);
-                        return;
-                    }
-                    userMessageList.add(choice.getMessage());
-                }
-                // 回复消息
-                sender.getSubject().sendMessage(CommandUtil.filter(reply));
-            }
-        } catch (BaseException e) {
-            // token过多，提示用户
-            BotConfig.logger.error(e);
-            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), qq, "Token超出上限，请使用/c end清空会话。");
-            sender.getSubject().sendMessage(message);
-        } catch (JSONException e) {
-            // 解析json出错
-            BotConfig.logger.error("解析json发生异常" + e);
-            BotConfig.logger.error("解析json发生异常 userMessageList: " + JSONObject.toJSONString(userMessageList));
-            // 返回默认信息
-            sender.getSubject().sendMessage(CommandUtil.filter(reply));
-        } catch (Exception e) {
-            // 请求异常
-            BotConfig.logger.error("userMessageList: " + JSONObject.toJSONString(userMessageList));
-            BotConfig.logger.error("reply: " + reply);
-            BotConfig.logger.error(e);
-            MessageChain message = MiraiUtil.buildQuoteReplyMessage(context.getOriginalMessage(), qq, "请求发生异常，请稍后重试。");
-            sender.getSubject().sendMessage(message);
-        }
+    }
 
+    /**
+     * 装载用户的提问
+     * @param messageChain
+     * @return
+     */
+    public UserChatMessage setupChatMessage(MessageChain messageChain) {
+        UserChatMessage userChatMessage = new UserChatMessage();
+        int index = 0;
+        // 1.装载请求使用的模型
+        String firstParam = messageChain.get(0).contentToString();
+        if (ChatGPTConfig.MODELS.contains(firstParam)) {
+            // 第一个参数是模型
+            userChatMessage.setModel(firstParam);
+            // 拼接剩下的参数
+            index = 1;
+        } else {
+            // 第一个参数就是提问，使用默认模型
+            userChatMessage.setModel(ChatGPTConfig.DEFAULT_MODEL);
+        }
+        // 2.装载用户的提问
+        StringBuilder sb = new StringBuilder();
+        for (int i = index; i < messageChain.size(); i++) {
+            sb.append(messageChain.get(i).contentToString()).append(" ");
+        }
+        userChatMessage.setMessage(sb.toString());
+        // 3.装载上传的文件
+
+        return userChatMessage;
     }
 
     /**
@@ -209,6 +191,14 @@ public class ChatGPTCommandHandler extends JRawCommand {
     }
 
     /**
+     * 设置模型
+     * @param args
+     */
+    private void setModel(MessageChain args) {
+        ChatGPTConfig.setModel(args.get(1).contentToString());
+    }
+
+    /**
      * 设置系统角色
      * @param args
      */
@@ -252,17 +242,31 @@ public class ChatGPTCommandHandler extends JRawCommand {
      * @param args            消息链
      * @param userMessageList 用户会话列表
      */
-    private void oneTimeSessionChat(MessageChain args, List<Message> userMessageList) {
-        //发起一次问答对话
-        StringBuilder sb = new StringBuilder();
-        for (SingleMessage arg : args) {
-            sb.append(arg.contentToString()).append(" ");
+    private void singleChat(MessageChain args, List<Message> userMessageList, CommandContext context) {
+        // 1.装载用户的提问
+        UserChatMessage userChatMessage = this.setupChatMessage(args);
+        if (StrUtil.isBlank(userChatMessage.getMessage())) {
+            // 提问为空，直接返回
+            return;
         }
+
+        // 发起一次问答对话
         Message systemPreset = ChatGPTConfig.getSystemPresetPrompt();
         if (Objects.nonNull(systemPreset)) {
             userMessageList.add(systemPreset);
         }
-        userMessageList.add(Message.builder().role(Message.Role.USER.getName()).content(sb.toString()).build());
+
+        userMessageList.add(Message.builder()
+                .role(Message.Role.USER.getName())
+                .content(userChatMessage.getMessage())
+                .build()
+        );
+
+        // 2.发起请求
+        AssistantCompletionMessage assistantCompletionMessage = ChatGPTConfig.handleChatCompletionApi(userChatMessage.getModel(), userMessageList, context);
+
+        // 3.回复消息
+        context.getSender().getSubject().sendMessage(CommandUtil.filter(assistantCompletionMessage.getContent()));
     }
 
     /**
@@ -332,7 +336,7 @@ public class ChatGPTCommandHandler extends JRawCommand {
         userMessageList.add(userMsg);
 
         //开始调用GPT3.5API
-        ChatCompletionResponse chatResponse = ChatGPTConfig.getOpenAiClient().chatCompletion(ChatGPTConfig.getChatCompletion(userMessageList));
+        ChatCompletionResponse chatResponse = ChatGPTConfig.getOpenAiClient().chatCompletion(ChatGPTConfig.getChatCompletion(ChatGPTConfig.DEFAULT_MODEL, userMessageList));
         List<ChatChoice> choices = chatResponse.getChoices();
         for (ChatChoice choice : choices) {
             String text = choice.getMessage().getContent();

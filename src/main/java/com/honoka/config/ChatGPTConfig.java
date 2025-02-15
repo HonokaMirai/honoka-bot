@@ -21,6 +21,8 @@ import okhttp3.OkHttpClient;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * @description ChatGPT相关配置
@@ -188,7 +190,8 @@ public class ChatGPTConfig {
             response.getChoices().forEach(choice -> {
                 sb.append(choice.getMessage().getContent());
             });
-            assistantCompletionMessage.setContent(sb.toString());
+            // 3.处理返回结果中的think标签
+            handleThinkingContent(sb.toString(), assistantCompletionMessage);
         } catch (BaseException e) {
             // token过多，提示用户
             BotConfig.logger.error(e);
@@ -201,6 +204,24 @@ public class ChatGPTConfig {
             context.getSender().getSubject().sendMessage(message);
         }
         return assistantCompletionMessage;
+    }
+
+    /**
+     * 处理带有think标签的内容
+     * @param originContent
+     * @param assistantCompletionMessage
+     */
+    private static void handleThinkingContent(String originContent, AssistantCompletionMessage assistantCompletionMessage) {
+        // 判断originContent里是否包含<think></think>，并把其中的内容提取出来
+        String thinkContent = "";
+        String content = originContent;
+        if (originContent.contains("<think>") && originContent.contains("</think>")) {
+            thinkContent = originContent.substring(originContent.indexOf("<think>") + 7, originContent.indexOf("</think>"));
+            content = originContent.substring(originContent.indexOf("</think>") + 8);
+        }
+        // 取出content字段前后的空格或者换行符
+        assistantCompletionMessage.setReasoningContent(thinkContent);
+        assistantCompletionMessage.setContent(content.trim());
     }
 
     /**

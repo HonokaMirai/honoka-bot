@@ -12,5 +12,9 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 public class AssistantCompletionMessage {
 
+    // 回答内容
     private String content;
+
+    // 思维链
+    private String reasoningContent;
 }

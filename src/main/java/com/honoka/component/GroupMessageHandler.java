@@ -28,7 +28,7 @@ public class GroupMessageHandler implements EventHandler<ChatEvent> {
         GroupContext groupContext = GroupAutoReplyManager.getOrCreateGroupContext(chatEvent.getGroupId(), null);
         long lastSequence = groupContext.getLastSequence();
         long sequenceCount = sequence - lastSequence;
-        long collectCount = 15;
+        long collectCount = GroupAutoReplyManager.COLLECT_COUNT;
         if (sequenceCount < collectCount) {
             // 不需要处理
             return;
@@ -43,10 +43,14 @@ public class GroupMessageHandler implements EventHandler<ChatEvent> {
             ChatEvent event = ringBuffer.get(sequence - i + 1);
             eventList.add(event);
         }
-        // 处理请求
-        String content = this.handleChatEventList(eventList);
-        // 发送消息
-        groupContext.getGroup().sendMessage(content);
+        try {
+            // 处理请求
+            String content = this.handleChatEventList(eventList);
+            // 发送消息
+            groupContext.getGroup().sendMessage(content);
+        } catch (Exception e) {
+            BotConfig.logger.error("发送消息失败", e);
+        }
     }
 
     public String handleChatEventList(List<ChatEvent> eventList) {

@@ -70,7 +70,7 @@ public class ChatGPTConfig {
     /**
      * 默认模型
      */
-    public static String DEFAULT_MODEL = "gpt-3.5-turbo";
+    public static String DEFAULT_MODEL = "deepseek-r1";
 
     /**
      * 支持的模型列表

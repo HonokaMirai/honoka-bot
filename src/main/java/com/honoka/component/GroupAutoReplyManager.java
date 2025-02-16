@@ -1,5 +1,6 @@
 package com.honoka.component;
 
+import cn.hutool.core.util.StrUtil;
 import com.honoka.model.ai.ChatEvent;
 import com.honoka.model.ai.GroupContext;
 import com.lmax.disruptor.BatchEventProcessor;
@@ -97,6 +98,9 @@ public class GroupAutoReplyManager {
             return;
         }
         if (qq == MYSELF_QQ) {
+            return;
+        }
+        if (StrUtil.isBlank(message.contentToString())) {
             return;
         }
         // 开始进行处理

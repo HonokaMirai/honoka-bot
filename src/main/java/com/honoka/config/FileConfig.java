@@ -205,7 +205,8 @@ public class FileConfig {
         // 读取本地配置文件
         LoaderOptions options = new LoaderOptions();
         Constructor constructor = new Constructor(BotConfig.class, options);
-        Yaml yaml = new Yaml(constructor);        BotConfig botConfig = new BotConfig();
+        Yaml yaml = new Yaml(constructor);
+        BotConfig botConfig = new BotConfig();
         try (InputStream inputStream = Files.newInputStream(Paths.get(BOT_CONFIG_PATH))) {
             // 解析配置文件为java对象
             botConfig = yaml.loadAs(inputStream, BotConfig.class);
